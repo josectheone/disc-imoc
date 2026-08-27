@@ -37,7 +37,6 @@
     }
     header strong { letter-spacing: 0.08em; font-size: 13px; }
     header span { color: #c4b8a8; font-size: 13px; }
-    header a { color: #e8d5a3; font-size: 13px; }
     main { max-width: 820px; margin: 0 auto; padding: 28px 18px 64px; }
     h1 { font-size: 28px; margin: 0 0 8px; letter-spacing: -0.03em; }
     .lede { color: var(--muted); margin: 0 0 24px; }
@@ -122,14 +121,7 @@
       font-size: 22px;
       margin: 0;
     }
-    .drop {
-      border: 1px dashed var(--muted);
-      border-radius: 10px;
-      padding: 22px;
-      text-align: center;
-      color: var(--muted);
-      background: #fff;
-    }
+    .ok { color: var(--s); font-size: 13px; }
     .err { color: var(--d); font-size: 13px; }
     .hidden { display: none; }
   </style>
@@ -138,10 +130,10 @@
   <header>
     <strong>DISC-IMOC</strong>
     <span>Mapeamento comportamental da operação</span>
-    <a href="#gestor">Painel da equipe</a>
   </header>
   <main id="app"></main>
   <script src="score.js"></script>
+  <script src="crypto.js"></script>
   <script>
     const Q = [
       ["Quando ocorre uma falha crítica na rede, eu normalmente:",
@@ -286,25 +278,37 @@
         "Ser menos detalhista."],
     ]
 
-    const STORE = "disc-imoc-submissions"
     const LETTERS = ["A", "B", "C", "D"]
     const FUNCOES = DiscImoc.ROLES.map((r) => r.name).concat("Outra / ainda não definido")
     const TURNOS = ["Manhã", "Tarde", "Noite", "Folguista / rodízio"]
+    const GH_FILE = "https://api.github.com/repos/josectheone/disc-imoc/contents/data/submissions.json"
 
     const state = {
       person: { nome: "", id: "", turno: "", funcao: "" },
       answers: Q.map(() => ({ mais: "", menos: "" })),
       i: 0,
       result: null,
+      sent: "",
     }
 
-    function loadAll() {
-      try { return JSON.parse(localStorage.getItem(STORE) || "[]") } catch { return [] }
-    }
-    function saveSubmission(row) {
-      const all = loadAll().filter((x) => x.person.id !== row.person.id)
-      all.push(row)
-      localStorage.setItem(STORE, JSON.stringify(all))
+    async function sendRemote(row) {
+      const cipher = await ImocCrypto.encryptRow(row)
+      const got = await fetch(GH_FILE, { headers: { Accept: "application/vnd.github+json" }, cache: "no-store" })
+      if (!got.ok) throw new Error("sync")
+      const meta = await got.json()
+      const rows = JSON.parse(decodeURIComponent(escape(atob(String(meta.content || "").replace(/\n/g, "")))))
+      const next = rows.filter((x) => x.id !== cipher.id).concat(cipher)
+      const body = unescape(encodeURIComponent(JSON.stringify(next)))
+      const put = await fetch(GH_FILE, {
+        method: "PUT",
+        headers: { Accept: "application/vnd.github+json", "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: "disc",
+          content: btoa(body),
+          sha: meta.sha,
+        }),
+      })
+      if (!put.ok) throw new Error("sync")
     }
 
     function el(html) {
@@ -408,7 +412,7 @@
         </div>`
     }
 
-    function finish() {
+    async function finish() {
       const scored = DiscImoc.scoreAll(state.answers)
       const row = {
         person: state.person,
@@ -422,7 +426,14 @@
         at: new Date().toISOString(),
       }
       state.result = { scored, row }
-      saveSubmission(row)
+      state.sent = "sending"
+      resultView()
+      try {
+        await sendRemote(row)
+        state.sent = "ok"
+      } catch {
+        state.sent = "err"
+      }
       resultView()
     }
 
@@ -467,10 +478,14 @@
         </div>
         <div class="actions">
           <button id="copy">Copiar resumo</button>
-          <button class="ghost" id="dl">Baixar JSON</button>
           <button class="ghost" id="again">Novo operador</button>
         </div>
-        <p class="hint">O resultado ficou salvo neste computador. Se o time responder em máquinas diferentes, baixe o JSON e importe no <a href="#gestor">painel da equipe</a>.</p>
+        <p class="${state.sent === "ok" ? "ok" : state.sent === "err" ? "err" : "hint"}" id="syncmsg">${
+          state.sent === "sending" ? "Enviando sua resposta…" :
+          state.sent === "ok" ? "Resposta registrada." :
+          state.sent === "err" ? "Não foi possível registrar agora. Copie o resumo se quiser guardar." :
+          ""
+        }</p>
       `)
       document.getElementById("copy").onclick = async () => {
         const t = [
@@ -485,85 +500,17 @@
         await navigator.clipboard.writeText(t)
         document.getElementById("copy").textContent = "Copiado"
       }
-      document.getElementById("dl").onclick = () => downloadJson(row)
       document.getElementById("again").onclick = () => {
         state.person = { nome: "", id: "", turno: "", funcao: "" }
         state.answers = Q.map(() => ({ mais: "", menos: "" }))
         state.result = null
-        location.hash = ""
+        state.sent = ""
         startView()
       }
     }
 
     function bar(k, name, n) {
       return `<div class="bar-row"><b>${k}</b><div><div class="hint">${name}</div><div class="bar"><i class="bg-${k.toLowerCase()}" style="width:${n}%"></i></div></div><b>${n}%</b></div>`
-    }
-
-    function gestorView() {
-      const rows = loadAll()
-      el(`
-        <h1>Painel da equipe</h1>
-        <p class="lede">Respostas salvas neste computador + arquivos JSON importados. Cada matrícula/e-mail vale uma vez (a mais recente substitui).</p>
-        <div class="card drop" id="drop">Solte os JSON aqui ou <label style="display:inline;font-weight:600;cursor:pointer">escolha arquivos<input id="files" type="file" accept="application/json" multiple class="hidden" /></label></div>
-        <div class="actions">
-          <button class="ghost" id="clear" ${rows.length ? "" : "disabled"}>Limpar painel local</button>
-          <button class="ghost" id="back">Voltar ao teste</button>
-        </div>
-        ${teamTable(rows)}
-      `)
-      const ingest = async (files) => {
-        for (const f of files) {
-          const data = JSON.parse(await f.text())
-          saveSubmission(data)
-        }
-        gestorView()
-      }
-      document.getElementById("files").onchange = (e) => ingest([...e.target.files])
-      const drop = document.getElementById("drop")
-      drop.ondragover = (e) => e.preventDefault()
-      drop.ondrop = (e) => { e.preventDefault(); ingest([...e.dataTransfer.files]) }
-      document.getElementById("clear").onclick = () => { localStorage.removeItem(STORE); gestorView() }
-      document.getElementById("back").onclick = () => { location.hash = ""; startView() }
-    }
-
-    function teamTable(rows) {
-      if (!rows.length) return `<p class="hint">Nenhuma resposta ainda.</p>`
-      const roles = DiscImoc.ROLES
-      const sorted = [...rows].sort((a, b) => a.person.nome.localeCompare(b.person.nome, "pt"))
-      return `
-        <div class="card" style="overflow-x:auto">
-          <table>
-            <thead>
-              <tr>
-                <th>Operador</th><th>Atual</th>
-                ${roles.map((r) => `<th class="num">${esc(r.name.split("–")[0] || r.name).trim()}</th>`).join("")}
-                <th>Recomendado</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${sorted.map((row) => {
-                const map = Object.fromEntries((row.roles || []).map((r) => [r.id, r.score]))
-                return `<tr>
-                  <td><b>${esc(row.person.nome)}</b><div class="hint">${esc(row.person.id)}</div></td>
-                  <td>${esc(short(row.person.funcao))}</td>
-                  ${roles.map((r) => `<td class="num">${map[r.id] ?? "–"}%</td>`).join("")}
-                  <td>${esc(short(row.recommended))}</td>
-                </tr>`
-              }).join("")}
-            </tbody>
-          </table>
-        </div>`
-    }
-
-    function short(s) { return (s || "").replace("Gestão de ", "").replace("Performance / ", "") }
-
-    function downloadJson(row) {
-      const slug = row.person.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-")
-      const blob = new Blob([JSON.stringify(row, null, 2)], { type: "application/json" })
-      const a = document.createElement("a")
-      a.href = URL.createObjectURL(blob)
-      a.download = `disc-imoc-${slug}.json`
-      a.click()
     }
 
     function opts(list, selected) {
@@ -575,8 +522,7 @@
     }
 
     function route() {
-      if (location.hash === "#gestor") gestorView()
-      else if (state.result) resultView()
+      if (state.result) resultView()
       else startView()
     }
     window.addEventListener("hashchange", route)

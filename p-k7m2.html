@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Acesso</title>
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --ink: #1c1916;
+      --muted: #6b645c;
+      --card: #fffdf8;
+      --line: #e4ddd3;
+      --d: #c23b2e;
+      --accent: #1c1916;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.45;
+    }
+    header {
+      background: #171411;
+      color: #f4f1ea;
+      padding: 18px 24px;
+    }
+    header strong { letter-spacing: 0.08em; font-size: 13px; }
+    main { max-width: 1100px; margin: 0 auto; padding: 28px 18px 64px; }
+    h1 { font-size: 28px; margin: 0 0 8px; letter-spacing: -0.03em; }
+    .lede { color: var(--muted); margin: 0 0 24px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 22px;
+      margin-bottom: 16px;
+    }
+    label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 6px; }
+    input {
+      width: 100%;
+      max-width: 360px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font: inherit;
+    }
+    button {
+      appearance: none;
+      border: 0;
+      background: var(--accent);
+      color: #fff;
+      padding: 12px 18px;
+      border-radius: 8px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 14px;
+    }
+    button.ghost {
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid var(--line);
+      margin-left: 8px;
+    }
+    .hint { font-size: 13px; color: var(--muted); }
+    .err { color: var(--d); font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+    th { font-size: 12px; color: var(--muted); font-weight: 600; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .gate { max-width: 420px; }
+  </style>
+</head>
+<body>
+  <header><strong>DISC-IMOC</strong></header>
+  <main id="app"></main>
+  <script src="score.js"></script>
+  <script src="crypto.js"></script>
+  <script>
+    const GH_FILE = "https://api.github.com/repos/josectheone/disc-imoc/contents/data/submissions.json"
+    let priv = null
+
+    function el(html) { document.getElementById("app").innerHTML = html }
+    function esc(s) {
+      return String(s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]))
+    }
+    function short(s) { return (s || "").replace("Gestão de ", "").replace("Performance / ", "") }
+
+    function loginView(err) {
+      el(`
+        <div class="card gate">
+          <h1>Acesso restrito</h1>
+          <p class="lede">Somente gestão.</p>
+          <label>Senha</label>
+          <input id="pw" type="password" autocomplete="current-password" />
+          <p class="err">${esc(err || "")}</p>
+          <button id="go">Entrar</button>
+        </div>
+      `)
+      document.getElementById("pw").focus()
+      document.getElementById("go").onclick = tryUnlock
+      document.getElementById("pw").onkeydown = (e) => { if (e.key === "Enter") tryUnlock() }
+    }
+
+    async function tryUnlock() {
+      const password = document.getElementById("pw").value
+      try {
+        priv = await ImocCrypto.unlockPrivate(password)
+        await panelView()
+      } catch {
+        loginView("Senha incorreta.")
+      }
+    }
+
+    async function loadCiphers() {
+      const r = await fetch(GH_FILE, { headers: { Accept: "application/vnd.github+json" }, cache: "no-store" })
+      if (!r.ok) throw new Error("fetch")
+      const meta = await r.json()
+      return JSON.parse(decodeURIComponent(escape(atob(String(meta.content || "").replace(/\n/g, "")))))
+    }
+
+    async function panelView() {
+      el(`<h1>Equipe</h1><p class="hint">Carregando…</p>`)
+      let rows = []
+      try {
+        const ciphers = await loadCiphers()
+        for (const c of ciphers) {
+          try { rows.push(await ImocCrypto.decryptRow(priv, c)) } catch {}
+        }
+      } catch {
+        el(`<div class="card"><p class="err">Não foi possível carregar as respostas.</p><button id="retry">Tentar de novo</button></div>`)
+        document.getElementById("retry").onclick = panelView
+        return
+      }
+      const roles = DiscImoc.ROLES
+      const sorted = rows.sort((a, b) => a.person.nome.localeCompare(b.person.nome, "pt"))
+      el(`
+        <h1>Equipe</h1>
+        <p class="lede">${sorted.length} resposta(s). Atualiza sozinho a cada 20s.</p>
+        <div class="card" style="overflow-x:auto">
+          ${sorted.length ? `<table>
+            <thead>
+              <tr>
+                <th>Operador</th><th>Atual</th>
+                ${roles.map((r) => `<th class="num">${esc((r.name.split("–")[0] || r.name).trim())}</th>`).join("")}
+                <th>Recomendado</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${sorted.map((row) => {
+                const map = Object.fromEntries((row.roles || []).map((r) => [r.id, r.score]))
+                return `<tr>
+                  <td><b>${esc(row.person.nome)}</b><div class="hint">${esc(row.person.id)} · ${esc(row.person.turno)}</div></td>
+                  <td>${esc(short(row.person.funcao))}</td>
+                  ${roles.map((r) => `<td class="num">${map[r.id] ?? "–"}%</td>`).join("")}
+                  <td>${esc(short(row.recommended))}</td>
+                </tr>`
+              }).join("")}
+            </tbody>
+          </table>` : `<p class="hint">Nenhuma resposta ainda.</p>`}
+        </div>
+        <button class="ghost" id="reload">Atualizar</button>
+      `)
+      document.getElementById("reload").onclick = panelView
+    }
+
+    loginView()
+    setInterval(() => { if (priv) panelView() }, 20000)
+  </script>
+</body>
+</html>
