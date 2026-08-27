@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DISC-IMOC</title>
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --ink: #1c1916;
+      --muted: #6b645c;
+      --card: #fffdf8;
+      --line: #e4ddd3;
+      --d: #c23b2e;
+      --i: #d4a017;
+      --s: #2f7d4a;
+      --c: #2a5f9e;
+      --accent: #1c1916;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.45;
+    }
+    header {
+      background: #171411;
+      color: #f4f1ea;
+      padding: 18px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    header strong { letter-spacing: 0.08em; font-size: 13px; }
+    header span { color: #c4b8a8; font-size: 13px; }
+    header a { color: #e8d5a3; font-size: 13px; }
+    main { max-width: 820px; margin: 0 auto; padding: 28px 18px 64px; }
+    h1 { font-size: 28px; margin: 0 0 8px; letter-spacing: -0.03em; }
+    .lede { color: var(--muted); margin: 0 0 24px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 22px;
+      margin-bottom: 16px;
+    }
+    label { display: block; font-size: 13px; font-weight: 600; margin: 12px 0 6px; }
+    input, select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font: inherit;
+      background: #fff;
+    }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 640px) { .row { grid-template-columns: 1fr; } }
+    button, .btn {
+      appearance: none;
+      border: 0;
+      background: var(--accent);
+      color: #fff;
+      padding: 12px 18px;
+      border-radius: 8px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button.ghost, .btn.ghost {
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+    .q-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+    .progress { height: 4px; background: var(--line); border-radius: 4px; margin: 8px 0 18px; }
+    .progress > i { display: block; height: 100%; background: var(--ink); border-radius: 4px; }
+    .opt {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      margin: 8px 0;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .opt.mais { border-color: var(--s); background: #eef7f1; }
+    .opt.menos { border-color: var(--d); background: #fbeeee; }
+    .chips { display: flex; gap: 6px; }
+    .chip {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .chip.on-mais { background: var(--s); color: #fff; border-color: var(--s); }
+    .chip.on-menos { background: var(--d); color: #fff; border-color: var(--d); }
+    .hint { font-size: 13px; color: var(--muted); }
+    .bars { display: grid; gap: 10px; }
+    .bar-row { display: grid; grid-template-columns: 28px 1fr 48px; gap: 8px; align-items: center; font-variant-numeric: tabular-nums; }
+    .bar { height: 10px; background: var(--line); border-radius: 6px; overflow: hidden; }
+    .bar > i { display: block; height: 100%; }
+    .bg-d { background: var(--d); } .bg-i { background: var(--i); }
+    .bg-s { background: var(--s); } .bg-c { background: var(--c); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+    th { font-size: 12px; color: var(--muted); font-weight: 600; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    tr.best td { font-weight: 700; }
+    ul { margin: 8px 0 0; padding-left: 18px; }
+    .rec {
+      font-size: 22px;
+      margin: 0;
+    }
+    .drop {
+      border: 1px dashed var(--muted);
+      border-radius: 10px;
+      padding: 22px;
+      text-align: center;
+      color: var(--muted);
+      background: #fff;
+    }
+    .err { color: var(--d); font-size: 13px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>DISC-IMOC</strong>
+    <span>Mapeamento comportamental da operação</span>
+    <a href="#gestor">Painel da equipe</a>
+  </header>
+  <main id="app"></main>
+  <script src="score.js"></script>
+  <script>
+    const Q = [
+      ["Quando ocorre uma falha crítica na rede, eu normalmente:",
+        "Tomo rapidamente a frente para resolver.",
+        "Procuro envolver as pessoas necessárias.",
+        "Mantenho a calma e sigo o procedimento.",
+        "Analiso os dados antes de tomar uma decisão."],
+      ["Em uma situação de pressão, eu:",
+        "Busco assumir o controle da situação.",
+        "Tento manter o ambiente positivo.",
+        "Procuro evitar conflitos desnecessários.",
+        "Verifico cuidadosamente as informações."],
+      ["Quando recebo um alarme que ainda não conheço:",
+        "Vou direto investigar a causa.",
+        "Pergunto rapidamente a alguém que já conhece o problema.",
+        "Sigo o procedimento estabelecido.",
+        "Procuro entender profundamente o comportamento do alarme."],
+      ["Durante um turno tranquilo, prefiro:",
+        "Procurar algo que possa ser melhorado.",
+        "Conversar e trocar informações com a equipe.",
+        "Manter minha rotina organizada.",
+        "Analisar indicadores e tendências."],
+      ["Quando alguém da equipe comete um erro:",
+        "Mostro imediatamente o que precisa ser corrigido.",
+        "Converso com a pessoa para entender o que aconteceu.",
+        "Procuro ajudá-la sem criar conflito.",
+        "Analiso a causa para evitar que aconteça novamente."],
+      ["Quando tenho muitas atividades simultâneas:",
+        "Priorizo rapidamente e parto para execução.",
+        "Divido as atividades com outras pessoas.",
+        "Organizo uma sequência e sigo com tranquilidade.",
+        "Avalio prioridades e impactos antes de agir."],
+      ["Quando encontro uma divergência em um KPI:",
+        "Quero saber imediatamente quem precisa agir.",
+        "Comunico a situação para chamar atenção da equipe.",
+        "Acompanho a evolução antes de tomar qualquer atitude.",
+        "Investigo os dados para descobrir a origem da divergência."],
+      ["Em uma reunião técnica, normalmente eu:",
+        "Questiono e proponho decisões.",
+        "Participo bastante e exponho minhas ideias.",
+        "Escuto e contribuo quando necessário.",
+        "Faço perguntas técnicas e busco evidências."],
+      ["Quando um problema persiste por várias horas:",
+        "Aumento a pressão para conseguir uma solução.",
+        "Mobilizo as pessoas necessárias.",
+        "Mantenho a calma e continuo acompanhando.",
+        "Reavalio a análise procurando uma causa diferente."],
+      ["Quando preciso aprender uma nova ferramenta:",
+        "Quero começar a usar imediatamente.",
+        "Gosto de aprender conversando com outras pessoas.",
+        "Prefiro aprender passo a passo.",
+        "Quero entender primeiro como a ferramenta funciona."],
+      ["Em uma situação de crise, acredito que sou melhor em:",
+        "Tomar decisões.",
+        "Comunicar e mobilizar pessoas.",
+        "Manter estabilidade e organização.",
+        "Analisar o problema."],
+      ["Quando recebo uma informação técnica incompleta:",
+        "Tomo uma decisão com o que tenho disponível.",
+        "Procuro alguém para complementar a informação.",
+        "Aguardo informações mais completas.",
+        "Investigo até conseguir evidências suficientes."],
+      ["Em relação a procedimentos operacionais:",
+        "Se necessário, adapto para ganhar velocidade.",
+        "Gosto de discutir melhorias com a equipe.",
+        "Considero importante seguir um padrão.",
+        "Gosto de entender o motivo de cada etapa."],
+      ["Quando uma decisão precisa ser tomada rapidamente:",
+        "Decido sem hesitar.",
+        "Busco apoio da equipe.",
+        "Procuro evitar uma decisão precipitada.",
+        "Utilizo os dados disponíveis para decidir."],
+      ["No trabalho, sou mais reconhecido por:",
+        "Resolver problemas difíceis.",
+        "Influenciar e motivar pessoas.",
+        "Ser confiável e constante.",
+        "Ser detalhista e analítico."],
+      ["Quando percebo que uma atividade poderia ser automatizada:",
+        "Quero implementar logo.",
+        "Procuro convencer a equipe da ideia.",
+        "Avalio primeiro os impactos para a operação.",
+        "Analiso tecnicamente a viabilidade."],
+      ["Quando um gestor questiona uma decisão minha:",
+        "Defendo minha posição.",
+        "Explico e tento convencê-lo.",
+        "Escuto e procuro chegar a um consenso.",
+        "Apresento dados e evidências."],
+      ["Quando ocorre uma falha que nunca vi antes:",
+        "Parto para tentativa e resolução.",
+        "Procuro alguém para trocar ideias.",
+        "Sigo uma abordagem mais conservadora.",
+        "Investigo tecnicamente antes de agir."],
+      ["Em uma equipe, normalmente assumo o papel de:",
+        "Quem toma iniciativa.",
+        "Quem integra as pessoas.",
+        "Quem mantém o grupo equilibrado.",
+        "Quem analisa e orienta tecnicamente."],
+      ["Quando percebo uma tendência de degradação na rede:",
+        "Quero agir antes que o problema cresça.",
+        "Alerto as pessoas envolvidas.",
+        "Acompanho para confirmar a tendência.",
+        "Analiso os dados para confirmar a causa."],
+      ["Quando preciso trabalhar durante muitas horas em uma atividade repetitiva:",
+        "Procuro uma forma de acelerar.",
+        "Busco conversar com a equipe para tornar o trabalho mais dinâmico.",
+        "Consigo manter o ritmo sem grandes dificuldades.",
+        "Procuro entender como otimizar tecnicamente o processo."],
+      ["Quando recebo uma crítica profissional:",
+        "Questiono se considero a crítica injusta.",
+        "Converso para entender melhor.",
+        "Procuro absorver tranquilamente.",
+        "Analiso se existem evidências que sustentem a crítica."],
+      ["Quando estou coordenando um incidente:",
+        "Defino rapidamente quem fará cada atividade.",
+        "Mantenho todos comunicados e envolvidos.",
+        "Procuro manter a equipe calma e organizada.",
+        "Acompanho tecnicamente cada etapa."],
+      ["Quando encontro uma falha no processo do IMOC:",
+        "Quero corrigir imediatamente.",
+        "Envolvo as pessoas para buscar uma solução.",
+        "Avalio cuidadosamente antes de mudar o processo.",
+        "Analiso detalhadamente o processo para identificar a causa."],
+      ["Quando tenho que apresentar um problema para a liderança:",
+        "Vou direto ao problema e à decisão necessária.",
+        "Procuro apresentar de forma convincente.",
+        "Explico com tranquilidade e equilíbrio.",
+        "Apresento dados, gráficos e evidências."],
+      ["Em uma situação em que duas áreas estão em conflito:",
+        "Busco definir rapidamente uma solução.",
+        "Tento aproximar as pessoas.",
+        "Procuro construir um acordo.",
+        "Busco fatos para determinar o que realmente aconteceu."],
+      ["O que mais me incomoda em uma operação é:",
+        "Lentidão para tomar decisões.",
+        "Falta de comunicação.",
+        "Mudanças constantes sem organização.",
+        "Informações inconsistentes ou sem evidências."],
+      ["Se eu pudesse melhorar uma característica minha profissionalmente, seria:",
+        "Ter mais paciência.",
+        "Ser mais objetivo.",
+        "Ser mais flexível.",
+        "Ser menos detalhista."],
+    ]
+
+    const STORE = "disc-imoc-submissions"
+    const LETTERS = ["A", "B", "C", "D"]
+    const FUNCOES = DiscImoc.ROLES.map((r) => r.name).concat("Outra / ainda não definido")
+    const TURNOS = ["Manhã", "Tarde", "Noite", "Folguista / rodízio"]
+
+    const state = {
+      person: { nome: "", id: "", turno: "", funcao: "" },
+      answers: Q.map(() => ({ mais: "", menos: "" })),
+      i: 0,
+      result: null,
+    }
+
+    function loadAll() {
+      try { return JSON.parse(localStorage.getItem(STORE) || "[]") } catch { return [] }
+    }
+    function saveSubmission(row) {
+      const all = loadAll().filter((x) => x.person.id !== row.person.id)
+      all.push(row)
+      localStorage.setItem(STORE, JSON.stringify(all))
+    }
+
+    function el(html) {
+      document.getElementById("app").innerHTML = html
+    }
+
+    function startView() {
+      const p = state.person
+      el(`
+        <h1>Teste DISC-IMOC</h1>
+        <p class="lede">28 situações reais de operação. Não existe resposta certa. Marque como você realmente age no turno, não como gostaria de agir.</p>
+        <div class="card">
+          <p class="hint">Em cada pergunta escolha <b>1 MAIS parecido com você</b> e <b>1 MENOS parecido</b>. As outras duas ficam em branco.</p>
+          <label>Nome completo</label>
+          <input id="nome" value="${esc(p.nome)}" autocomplete="name" />
+          <div class="row">
+            <div>
+              <label>Matrícula ou e-mail</label>
+              <input id="pid" value="${esc(p.id)}" autocomplete="username" />
+            </div>
+            <div>
+              <label>Turno</label>
+              <select id="turno">${opts(TURNOS, p.turno)}</select>
+            </div>
+          </div>
+          <label>Função atual</label>
+          <select id="funcao">${opts(FUNCOES, p.funcao)}</select>
+          <p class="err" id="err"></p>
+          <div class="actions">
+            <button id="go">Começar o teste</button>
+          </div>
+        </div>
+      `)
+      document.getElementById("go").onclick = () => {
+        state.person = {
+          nome: val("nome").trim(),
+          id: val("pid").trim(),
+          turno: val("turno"),
+          funcao: val("funcao"),
+        }
+        if (state.person.nome.length < 3 || state.person.id.length < 3 || !state.person.turno || !state.person.funcao) {
+          document.getElementById("err").textContent = "Preencha nome, matrícula/e-mail, turno e função atual."
+          return
+        }
+        state.i = 0
+        questionView()
+      }
+    }
+
+    function questionView() {
+      const i = state.i
+      const q = Q[i]
+      const a = state.answers[i]
+      const pct = Math.round((i / Q.length) * 100)
+      el(`
+        <div class="q-head">
+          <h1>Pergunta ${i + 1} <span class="hint">de ${Q.length}</span></h1>
+        </div>
+        <div class="progress"><i style="width:${pct}%"></i></div>
+        <div class="card">
+          <p><b>${esc(q[0])}</b></p>
+          ${LETTERS.map((L, idx) => optionRow(L, q[idx + 1], a)).join("")}
+          <p class="hint">MAIS = o que mais se parece com você. MENOS = o que menos se parece.</p>
+          <div class="actions">
+            <button class="ghost" id="prev" ${i === 0 ? "disabled" : ""}>Voltar</button>
+            <button id="next" ${a.mais && a.menos ? "" : "disabled"}>${i === Q.length - 1 ? "Ver resultado" : "Próxima"}</button>
+          </div>
+        </div>
+      `)
+      document.getElementById("prev").onclick = () => { state.i--; questionView() }
+      document.getElementById("next").onclick = () => {
+        if (i === Q.length - 1) finish()
+        else { state.i++; questionView() }
+      }
+      document.querySelectorAll(".chip").forEach((btn) => {
+        btn.onclick = () => {
+          const letter = btn.dataset.l
+          const kind = btn.dataset.k
+          const cur = state.answers[i]
+          if (kind === "mais") {
+            if (cur.menos === letter) return
+            cur.mais = cur.mais === letter ? "" : letter
+          } else {
+            if (cur.mais === letter) return
+            cur.menos = cur.menos === letter ? "" : letter
+          }
+          questionView()
+        }
+      })
+    }
+
+    function optionRow(letter, text, a) {
+      const cls = a.mais === letter ? "mais" : a.menos === letter ? "menos" : ""
+      return `
+        <div class="opt ${cls}">
+          <div><b>${letter}.</b> ${esc(text)}</div>
+          <div class="chips">
+            <button type="button" class="chip ${a.mais === letter ? "on-mais" : ""}" data-l="${letter}" data-k="mais">MAIS</button>
+            <button type="button" class="chip ${a.menos === letter ? "on-menos" : ""}" data-l="${letter}" data-k="menos">MENOS</button>
+          </div>
+        </div>`
+    }
+
+    function finish() {
+      const scored = DiscImoc.scoreAll(state.answers)
+      const row = {
+        person: state.person,
+        answers: state.answers,
+        pct: scored.pct,
+        profile: scored.profile,
+        roles: scored.roles.map((r) => ({ id: r.id, name: r.name, score: r.score })),
+        recommended: scored.recommended.name,
+        strengths: scored.strengths,
+        watchouts: scored.watchouts,
+        at: new Date().toISOString(),
+      }
+      state.result = { scored, row }
+      saveSubmission(row)
+      resultView()
+    }
+
+    function resultView() {
+      const { scored, row } = state.result
+      const p = scored.pct
+      el(`
+        <p class="hint">${esc(row.person.nome)} · ${esc(row.person.id)} · ${esc(row.person.turno)}</p>
+        <h1>${esc(row.person.nome)}</h1>
+        <p class="lede">Perfil: <b>${esc(scored.profile)}</b> · Função atual: ${esc(row.person.funcao)}</p>
+        <div class="card">
+          <h2 style="margin-top:0">DISC</h2>
+          <div class="bars">
+            ${bar("D", "Dominância", p.D)}
+            ${bar("I", "Influência", p.I)}
+            ${bar("S", "Estabilidade", p.S)}
+            ${bar("C", "Conformidade", p.C)}
+          </div>
+        </div>
+        <div class="card">
+          <p class="hint">Função recomendada</p>
+          <p class="rec">${esc(scored.recommended.name)} — ${scored.recommended.score}%</p>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">Aderência às funções</h2>
+          <table>
+            <thead><tr><th>Posição</th><th class="num">Aderência</th></tr></thead>
+            <tbody>
+              ${scored.roles.map((r, i) => `<tr class="${i === 0 ? "best" : ""}"><td>${esc(r.name)}</td><td class="num">${r.score}%</td></tr>`).join("")}
+            </tbody>
+          </table>
+        </div>
+        <div class="row">
+          <div class="card">
+            <h2 style="margin-top:0">Pontos fortes</h2>
+            <ul>${scored.strengths.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
+          </div>
+          <div class="card">
+            <h2 style="margin-top:0">Pontos de atenção</h2>
+            <ul>${scored.watchouts.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="copy">Copiar resumo</button>
+          <button class="ghost" id="dl">Baixar JSON</button>
+          <button class="ghost" id="again">Novo operador</button>
+        </div>
+        <p class="hint">O resultado ficou salvo neste computador. Se o time responder em máquinas diferentes, baixe o JSON e importe no <a href="#gestor">painel da equipe</a>.</p>
+      `)
+      document.getElementById("copy").onclick = async () => {
+        const t = [
+          `OPERADOR: ${row.person.nome}`,
+          `ID: ${row.person.id} | Turno: ${row.person.turno} | Função atual: ${row.person.funcao}`,
+          `DISC  D:${p.D}%  I:${p.I}%  S:${p.S}%  C:${p.C}%`,
+          `Perfil: ${scored.profile}`,
+          `Recomendado: ${scored.recommended.name} (${scored.recommended.score}%)`,
+          "Aderência:",
+          ...scored.roles.map((r) => `  ${r.name}: ${r.score}%`),
+        ].join("\n")
+        await navigator.clipboard.writeText(t)
+        document.getElementById("copy").textContent = "Copiado"
+      }
+      document.getElementById("dl").onclick = () => downloadJson(row)
+      document.getElementById("again").onclick = () => {
+        state.person = { nome: "", id: "", turno: "", funcao: "" }
+        state.answers = Q.map(() => ({ mais: "", menos: "" }))
+        state.result = null
+        location.hash = ""
+        startView()
+      }
+    }
+
+    function bar(k, name, n) {
+      return `<div class="bar-row"><b>${k}</b><div><div class="hint">${name}</div><div class="bar"><i class="bg-${k.toLowerCase()}" style="width:${n}%"></i></div></div><b>${n}%</b></div>`
+    }
+
+    function gestorView() {
+      const rows = loadAll()
+      el(`
+        <h1>Painel da equipe</h1>
+        <p class="lede">Respostas salvas neste computador + arquivos JSON importados. Cada matrícula/e-mail vale uma vez (a mais recente substitui).</p>
+        <div class="card drop" id="drop">Solte os JSON aqui ou <label style="display:inline;font-weight:600;cursor:pointer">escolha arquivos<input id="files" type="file" accept="application/json" multiple class="hidden" /></label></div>
+        <div class="actions">
+          <button class="ghost" id="clear" ${rows.length ? "" : "disabled"}>Limpar painel local</button>
+          <button class="ghost" id="back">Voltar ao teste</button>
+        </div>
+        ${teamTable(rows)}
+      `)
+      const ingest = async (files) => {
+        for (const f of files) {
+          const data = JSON.parse(await f.text())
+          saveSubmission(data)
+        }
+        gestorView()
+      }
+      document.getElementById("files").onchange = (e) => ingest([...e.target.files])
+      const drop = document.getElementById("drop")
+      drop.ondragover = (e) => e.preventDefault()
+      drop.ondrop = (e) => { e.preventDefault(); ingest([...e.dataTransfer.files]) }
+      document.getElementById("clear").onclick = () => { localStorage.removeItem(STORE); gestorView() }
+      document.getElementById("back").onclick = () => { location.hash = ""; startView() }
+    }
+
+    function teamTable(rows) {
+      if (!rows.length) return `<p class="hint">Nenhuma resposta ainda.</p>`
+      const roles = DiscImoc.ROLES
+      const sorted = [...rows].sort((a, b) => a.person.nome.localeCompare(b.person.nome, "pt"))
+      return `
+        <div class="card" style="overflow-x:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Operador</th><th>Atual</th>
+                ${roles.map((r) => `<th class="num">${esc(r.name.split("–")[0] || r.name).trim()}</th>`).join("")}
+                <th>Recomendado</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${sorted.map((row) => {
+                const map = Object.fromEntries((row.roles || []).map((r) => [r.id, r.score]))
+                return `<tr>
+                  <td><b>${esc(row.person.nome)}</b><div class="hint">${esc(row.person.id)}</div></td>
+                  <td>${esc(short(row.person.funcao))}</td>
+                  ${roles.map((r) => `<td class="num">${map[r.id] ?? "–"}%</td>`).join("")}
+                  <td>${esc(short(row.recommended))}</td>
+                </tr>`
+              }).join("")}
+            </tbody>
+          </table>
+        </div>`
+    }
+
+    function short(s) { return (s || "").replace("Gestão de ", "").replace("Performance / ", "") }
+
+    function downloadJson(row) {
+      const slug = row.person.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-")
+      const blob = new Blob([JSON.stringify(row, null, 2)], { type: "application/json" })
+      const a = document.createElement("a")
+      a.href = URL.createObjectURL(blob)
+      a.download = `disc-imoc-${slug}.json`
+      a.click()
+    }
+
+    function opts(list, selected) {
+      return `<option value="">Selecione</option>` + list.map((x) => `<option ${x === selected ? "selected" : ""}>${esc(x)}</option>`).join("")
+    }
+    function val(id) { return document.getElementById(id).value }
+    function esc(s) {
+      return String(s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]))
+    }
+
+    function route() {
+      if (location.hash === "#gestor") gestorView()
+      else if (state.result) resultView()
+      else startView()
+    }
+    window.addEventListener("hashchange", route)
+    route()
+  </script>
+</body>
+</html>
