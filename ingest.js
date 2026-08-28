@@ -1,5 +1,5 @@
 const fs = require("fs")
-const file = "data/submissions.json"
+const file = process.env.FILE || "data/submissions.json"
 let payload = JSON.parse(process.env.PAYLOAD || "{}")
 if (payload.cipher) payload = typeof payload.cipher === "string" ? JSON.parse(payload.cipher) : payload.cipher
 if (!payload.k || !payload.d) process.exit(0)
