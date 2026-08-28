@@ -22,7 +22,7 @@ async function encryptRow(obj) {
   const d = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aes, new TextEncoder().encode(JSON.stringify(obj)))
   const raw = await crypto.subtle.exportKey("raw", aes)
   const k = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, pub, raw)
-  return { id: obj.person.id, at: obj.at, k: b64e(k), iv: b64e(iv), d: b64e(d) }
+  return { at: obj.at, k: b64e(k), iv: b64e(iv), d: b64e(d) }
 }
 
 async function unlockPrivate(password) {
