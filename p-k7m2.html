@@ -93,7 +93,6 @@
   <script src="score.js"></script>
   <script src="crypto.js?v=2"></script>
   <script>
-    const GH_FILE = "https://api.github.com/repos/josectheone/disc-imoc/contents/data/submissions.json"
     const SESSION_KEY = "disc-imoc-sess"
     const SESSION_MS = 60 * 60 * 1000
     let priv = null
@@ -151,10 +150,9 @@
     }
 
     async function loadCiphers() {
-      const r = await fetch(GH_FILE, { headers: { Accept: "application/vnd.github+json" }, cache: "no-store" })
+      const r = await fetch("data/submissions.json?" + Date.now(), { cache: "no-store" })
       if (!r.ok) throw new Error("fetch")
-      const meta = await r.json()
-      return JSON.parse(decodeURIComponent(escape(atob(String(meta.content || "").replace(/\n/g, "")))))
+      return r.json()
     }
 
     async function panelView() {
