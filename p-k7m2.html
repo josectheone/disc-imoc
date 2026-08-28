@@ -73,6 +73,18 @@
     th { font-size: 12px; color: var(--muted); font-weight: 600; }
     td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     .gate { max-width: 420px; }
+    .bars { display: grid; gap: 10px; }
+    .bar-row { display: grid; grid-template-columns: 28px 1fr 48px; gap: 8px; align-items: center; font-variant-numeric: tabular-nums; }
+    .bar { height: 10px; background: var(--line); border-radius: 6px; overflow: hidden; }
+    .bar > i { display: block; height: 100%; }
+    .bg-d { background: #c23b2e; } .bg-i { background: #d4a017; }
+    .bg-s { background: #2f7d4a; } .bg-c { background: #2a5f9e; }
+    .rec { font-size: 22px; margin: 0; }
+    tr.pick { cursor: pointer; }
+    tr.pick:hover td { background: #f4f1ea; }
+    ul { margin: 8px 0 0; padding-left: 18px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 640px) { .row { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -82,13 +94,34 @@
   <script src="crypto.js"></script>
   <script>
     const GH_FILE = "https://api.github.com/repos/josectheone/disc-imoc/contents/data/submissions.json"
+    const SESSION_KEY = "disc-imoc-sess"
+    const SESSION_MS = 60 * 60 * 1000
     let priv = null
+    let openId = ""
 
     function el(html) { document.getElementById("app").innerHTML = html }
     function esc(s) {
       return String(s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]))
     }
     function short(s) { return (s || "").replace("Gestão de ", "").replace("Performance / ", "") }
+    function bar(k, name, n) {
+      return `<div class="bar-row"><b>${k}</b><div><div class="hint">${name}</div><div class="bar"><i class="bg-${k.toLowerCase()}" style="width:${n}%"></i></div></div><b>${n}%</b></div>`
+    }
+    function saveSession(jwk) {
+      localStorage.setItem(SESSION_KEY, JSON.stringify({ exp: Date.now() + SESSION_MS, priv: jwk }))
+    }
+    function loadSession() {
+      try {
+        const s = JSON.parse(localStorage.getItem(SESSION_KEY) || "null")
+        if (!s || Date.now() > s.exp || !s.priv) {
+          localStorage.removeItem(SESSION_KEY)
+          return null
+        }
+        return s.priv
+      } catch {
+        return null
+      }
+    }
 
     function loginView(err) {
       el(`
@@ -110,6 +143,7 @@
       const password = document.getElementById("pw").value
       try {
         priv = await ImocCrypto.unlockPrivate(password)
+        saveSession(priv)
         await panelView()
       } catch {
         loginView("Senha incorreta.")
@@ -153,7 +187,7 @@
             <tbody>
               ${sorted.map((row) => {
                 const map = Object.fromEntries((row.roles || []).map((r) => [r.id, r.score]))
-                return `<tr>
+                return `<tr class="pick" data-id="${esc(row.person.id)}">
                   <td><b>${esc(row.person.nome)}</b><div class="hint">${esc(row.person.id)} · ${esc(row.person.turno)}</div></td>
                   <td>${esc(short(row.person.funcao))}</td>
                   ${roles.map((r) => `<td class="num">${map[r.id] ?? "–"}%</td>`).join("")}
@@ -164,11 +198,56 @@
           </table>` : `<p class="hint">Nenhuma resposta ainda.</p>`}
         </div>
         <button class="ghost" id="reload">Atualizar</button>
+        ${detailHtml(sorted.find((r) => r.person.id === openId))}
       `)
       document.getElementById("reload").onclick = panelView
+      document.querySelectorAll("tr.pick").forEach((tr) => {
+        tr.onclick = () => {
+          openId = tr.dataset.id
+          panelView()
+        }
+      })
     }
 
-    loginView()
+    function detailHtml(row) {
+      if (!row) return ""
+      const p = row.pct || {}
+      return `
+        <div class="card">
+          <h2 style="margin-top:0">${esc(row.person.nome)}</h2>
+          <p class="lede">Perfil: <b>${esc(row.profile)}</b> · ${esc(row.person.funcao)}</p>
+          <div class="bars" style="margin:12px 0 18px">
+            ${bar("D", "Dominância", p.D)}
+            ${bar("I", "Influência", p.I)}
+            ${bar("S", "Estabilidade", p.S)}
+            ${bar("C", "Conformidade", p.C)}
+          </div>
+          <p class="hint">Função recomendada</p>
+          <p class="rec">${esc(row.recommended)} — ${row.roles?.[0]?.score ?? ""}%</p>
+        </div>
+        <div class="card">
+          <h2 style="margin-top:0">Aderência</h2>
+          <table>
+            <tbody>
+              ${(row.roles || []).map((r) => `<tr><td>${esc(r.name)}</td><td class="num">${r.score}%</td></tr>`).join("")}
+            </tbody>
+          </table>
+        </div>
+        <div class="row">
+          <div class="card">
+            <h2 style="margin-top:0">Pontos fortes</h2>
+            <ul>${(row.strengths || []).map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
+          </div>
+          <div class="card">
+            <h2 style="margin-top:0">Pontos de atenção</h2>
+            <ul>${(row.watchouts || []).map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
+          </div>
+        </div>`
+    }
+
+    priv = loadSession()
+    if (priv) panelView()
+    else loginView()
     setInterval(() => { if (priv) panelView() }, 20000)
   </script>
 </body>

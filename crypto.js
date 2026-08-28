@@ -52,6 +52,8 @@ async function decryptRow(privJwk, row) {
   return JSON.parse(new TextDecoder().decode(pt))
 }
 
-const ImocCrypto = { PUB, encryptRow, unlockPrivate, decryptRow }
+const WRITE_TOKEN = ""
+
+const ImocCrypto = { PUB, WRITE_TOKEN, encryptRow, unlockPrivate, decryptRow }
 if (typeof window !== "undefined") window.ImocCrypto = ImocCrypto
 if (typeof module !== "undefined") module.exports = ImocCrypto

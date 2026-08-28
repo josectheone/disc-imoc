@@ -281,7 +281,6 @@
     const LETTERS = ["A", "B", "C", "D"]
     const FUNCOES = DiscImoc.ROLES.map((r) => r.name).concat("Outra / ainda não definido")
     const TURNOS = ["Manhã", "Tarde", "Noite", "Folguista / rodízio"]
-    const GH_FILE = "https://api.github.com/repos/josectheone/disc-imoc/contents/data/submissions.json"
 
     const state = {
       person: { nome: "", id: "", turno: "", funcao: "" },
@@ -293,22 +292,15 @@
 
     async function sendRemote(row) {
       const cipher = await ImocCrypto.encryptRow(row)
-      const got = await fetch(GH_FILE, { headers: { Accept: "application/vnd.github+json" }, cache: "no-store" })
-      if (!got.ok) throw new Error("sync")
-      const meta = await got.json()
-      const rows = JSON.parse(decodeURIComponent(escape(atob(String(meta.content || "").replace(/\n/g, "")))))
-      const next = rows.filter((x) => x.id !== cipher.id).concat(cipher)
-      const body = unescape(encodeURIComponent(JSON.stringify(next)))
-      const put = await fetch(GH_FILE, {
-        method: "PUT",
-        headers: { Accept: "application/vnd.github+json", "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: "disc",
-          content: btoa(body),
-          sha: meta.sha,
-        }),
+      const r = await fetch("https://api.github.com/repos/josectheone/disc-imoc/dispatches", {
+        method: "POST",
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: "Bearer " + ImocCrypto.WRITE_TOKEN,
+        },
+        body: JSON.stringify({ event_type: "disc-submit", client_payload: { cipher: JSON.stringify(cipher) } }),
       })
-      if (!put.ok) throw new Error("sync")
+      if (r.status !== 204 && !r.ok) throw new Error("sync")
     }
 
     function el(html) {
@@ -374,7 +366,7 @@
           <p class="hint">MAIS = o que mais se parece com você. MENOS = o que menos se parece.</p>
           <div class="actions">
             <button class="ghost" id="prev" ${i === 0 ? "disabled" : ""}>Voltar</button>
-            <button id="next" ${a.mais && a.menos ? "" : "disabled"}>${i === Q.length - 1 ? "Ver resultado" : "Próxima"}</button>
+            <button id="next" ${a.mais && a.menos ? "" : "disabled"}>${i === Q.length - 1 ? "Enviar" : "Próxima"}</button>
           </div>
         </div>
       `)
@@ -425,7 +417,7 @@
         watchouts: scored.watchouts,
         at: new Date().toISOString(),
       }
-      state.result = { scored, row }
+      state.result = { row }
       state.sent = "sending"
       resultView()
       try {
@@ -438,79 +430,33 @@
     }
 
     function resultView() {
-      const { scored, row } = state.result
-      const p = scored.pct
+      const { row } = state.result
+      const sending = state.sent === "sending"
+      const ok = state.sent === "ok"
       el(`
-        <p class="hint">${esc(row.person.nome)} · ${esc(row.person.id)} · ${esc(row.person.turno)}</p>
-        <h1>${esc(row.person.nome)}</h1>
-        <p class="lede">Perfil: <b>${esc(scored.profile)}</b> · Função atual: ${esc(row.person.funcao)}</p>
+        <h1>Obrigado, ${esc(row.person.nome.split(" ")[0])}</h1>
+        <p class="lede">Suas respostas foram ${ok ? "enviadas" : sending ? "sendo enviadas" : "preenchidas"}.</p>
         <div class="card">
-          <h2 style="margin-top:0">DISC</h2>
-          <div class="bars">
-            ${bar("D", "Dominância", p.D)}
-            ${bar("I", "Influência", p.I)}
-            ${bar("S", "Estabilidade", p.S)}
-            ${bar("C", "Conformidade", p.C)}
+          <p>${ok
+            ? "A gestão vai avaliar o resultado antes de qualquer devolutiva."
+            : sending
+              ? "Registrando suas respostas…"
+              : "Não foi possível enviar agora. Toque em tentar de novo."}</p>
+          <div class="actions">
+            ${ok ? `<button class="ghost" id="again">Nova resposta</button>` : sending ? "" : `<button id="retry">Tentar de novo</button>`}
           </div>
         </div>
-        <div class="card">
-          <p class="hint">Função recomendada</p>
-          <p class="rec">${esc(scored.recommended.name)} — ${scored.recommended.score}%</p>
-        </div>
-        <div class="card">
-          <h2 style="margin-top:0">Aderência às funções</h2>
-          <table>
-            <thead><tr><th>Posição</th><th class="num">Aderência</th></tr></thead>
-            <tbody>
-              ${scored.roles.map((r, i) => `<tr class="${i === 0 ? "best" : ""}"><td>${esc(r.name)}</td><td class="num">${r.score}%</td></tr>`).join("")}
-            </tbody>
-          </table>
-        </div>
-        <div class="row">
-          <div class="card">
-            <h2 style="margin-top:0">Pontos fortes</h2>
-            <ul>${scored.strengths.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
-          </div>
-          <div class="card">
-            <h2 style="margin-top:0">Pontos de atenção</h2>
-            <ul>${scored.watchouts.map((s) => `<li>${esc(s)}</li>`).join("")}</ul>
-          </div>
-        </div>
-        <div class="actions">
-          <button id="copy">Copiar resumo</button>
-          <button class="ghost" id="again">Novo operador</button>
-        </div>
-        <p class="${state.sent === "ok" ? "ok" : state.sent === "err" ? "err" : "hint"}" id="syncmsg">${
-          state.sent === "sending" ? "Enviando sua resposta…" :
-          state.sent === "ok" ? "Resposta registrada." :
-          state.sent === "err" ? "Não foi possível registrar agora. Copie o resumo se quiser guardar." :
-          ""
-        }</p>
       `)
-      document.getElementById("copy").onclick = async () => {
-        const t = [
-          `OPERADOR: ${row.person.nome}`,
-          `ID: ${row.person.id} | Turno: ${row.person.turno} | Função atual: ${row.person.funcao}`,
-          `DISC  D:${p.D}%  I:${p.I}%  S:${p.S}%  C:${p.C}%`,
-          `Perfil: ${scored.profile}`,
-          `Recomendado: ${scored.recommended.name} (${scored.recommended.score}%)`,
-          "Aderência:",
-          ...scored.roles.map((r) => `  ${r.name}: ${r.score}%`),
-        ].join("\n")
-        await navigator.clipboard.writeText(t)
-        document.getElementById("copy").textContent = "Copiado"
-      }
-      document.getElementById("again").onclick = () => {
+      const retry = document.getElementById("retry")
+      if (retry) retry.onclick = () => finish()
+      const again = document.getElementById("again")
+      if (again) again.onclick = () => {
         state.person = { nome: "", id: "", turno: "", funcao: "" }
         state.answers = Q.map(() => ({ mais: "", menos: "" }))
         state.result = null
         state.sent = ""
         startView()
       }
-    }
-
-    function bar(k, name, n) {
-      return `<div class="bar-row"><b>${k}</b><div><div class="hint">${name}</div><div class="bar"><i class="bg-${k.toLowerCase()}" style="width:${n}%"></i></div></div><b>${n}%</b></div>`
     }
 
     function opts(list, selected) {
