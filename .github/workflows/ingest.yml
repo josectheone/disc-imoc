@@ -4,6 +4,7 @@ on:
     types: [disc-submit, disc-submit-n2]
 permissions:
   contents: write
+  actions: write
 jobs:
   save:
     runs-on: ubuntu-latest
@@ -20,3 +21,6 @@ jobs:
           git add "$FILE"
           git diff --staged --quiet || git commit -m "disc"
           git push
+      - run: gh workflow run pages.yml
+        env:
+          GH_TOKEN: ${{ github.token }}
